@@ -1,11 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 
 namespace MultiConsoleViews
 {
     public class ConsoleView
-    {        
+    {
         public char LeftBorder { get; set; } = '║';
         public char RightBorder { get; set; } = '║';
         public char TopBorder { get; set; } = '═';
@@ -14,13 +15,24 @@ namespace MultiConsoleViews
         public char TopRightCorner { get; set; } = '╗';
         public char BottomLeftCorner { get; set; } = '╚';
         public char BottomRightCorner { get; set; } = '╝';
-        public ConsoleColor ActiveBorderColor = ConsoleColor.Yellow;
-        public ConsoleColor InactiveBorderColor = ConsoleColor.Gray;
+
+        public ConsoleColor ActiveBorderForegroundColor = ConsoleColor.Yellow;
+        public ConsoleColor ActiveBorderBackgroundColor = ConsoleColor.Black;
+        public ConsoleColor InactiveBorderForegroundColor = ConsoleColor.Gray;
+        public ConsoleColor InactiveBorderBackgroundColor = ConsoleColor.Black;
         public ConsoleColor ForegroundColor = ConsoleColor.Gray;
         public ConsoleColor BackgroundColor = ConsoleColor.Black;
+        public ConsoleColor PaddingBackgroundColor = ConsoleColor.Black;
+        public ConsoleColor PaddingForegroundColor = ConsoleColor.Gray;
+
         public string Title { get; set; }
         public int BorderSize { get; set; } = 1;
         public int Padding { get; set; } = 0;
+        public int WindowAreaTopOnScreen { get => TopOnScreen + BorderSize; }
+        public int WindowAreaLeftOnScreen { get => LeftOnScreen + BorderSize; }
+        public int WindowAreaWidth { get => Width - 2 * BorderSize; }
+        public int WindowAreaBottomOnScreen { get => BottomOnScreen - BorderSize; }
+        public int WindowAreaRightOnScreen { get => RightOnScreen - BorderSize; }
         public int ClientAreaFrameWidth { get => BorderSize + Padding; }
 
         public int MaxWidth
@@ -51,7 +63,7 @@ namespace MultiConsoleViews
 
         public int RequestedTop { get; set; }
         public int Top { get => Math.Max(RequestedTop, 0); }
-        public int TopOnScreen 
+        public int TopOnScreen
         {
             get
             {
@@ -59,13 +71,13 @@ namespace MultiConsoleViews
 
                 return Parent.ClientAreaTopOnScreen + Top;
             }
-        }        
+        }
         public int ClientAreaTop { get => Top + ClientAreaFrameWidth; }
         public int ClientAreaTopOnScreen { get => TopOnScreen + ClientAreaFrameWidth; }
-       
+
         public int RequestedLeft { get; set; }
         public int Left { get => Math.Max(RequestedLeft, 0); }
-        public int LeftOnScreen 
+        public int LeftOnScreen
         {
             get
             {
@@ -98,7 +110,7 @@ namespace MultiConsoleViews
                 DrawBorder();
             }
         }
-        
+
         private ConsoleView activeChildWindow;
         private List<ConsoleView> children = new List<ConsoleView>();
         private int cursorLeftOnScreen;
@@ -199,29 +211,64 @@ namespace MultiConsoleViews
             BottomRightCorner = borderSet.BottomRightCorner;
         }
 
+        public void FillPaddingArea(char c)
+        {
+            if (Padding < 1) return;
+
+            string fillString = new string(c, WindowAreaWidth);
+            string fillStringShort = new string(c, Padding);
+            ConsoleColor originalForeColor = Console.ForegroundColor;
+            ConsoleColor originalBackColor = Console.BackgroundColor;
+            Console.ForegroundColor = PaddingForegroundColor;
+            Console.BackgroundColor = PaddingBackgroundColor;
+            for (int i = WindowAreaTopOnScreen; i < ClientAreaTopOnScreen; i++)
+            {
+                Console.SetCursorPosition(WindowAreaLeftOnScreen, i);
+                Console.Write(fillString);
+            }
+
+            for (int i = ClientAreaTopOnScreen; i <= ClientAreaBottomOnScreen; i++)
+            {
+                Console.SetCursorPosition(WindowAreaLeftOnScreen, i);
+                Console.Write(fillStringShort);
+                Console.SetCursorPosition(WindowAreaRightOnScreen - Padding + 1, i);
+                Console.Write(fillStringShort);
+            }
+
+            for (int i = WindowAreaBottomOnScreen - Padding + 1; i <= WindowAreaBottomOnScreen; i++)
+            {
+                Console.SetCursorPosition(WindowAreaLeftOnScreen, i);
+                Console.Write(fillString);
+            }
+
+            Console.ForegroundColor = originalForeColor;
+            Console.BackgroundColor = originalBackColor;
+        }
+
         public void FillClientArea(char c)
         {
             string fillString = new string(c, ClientAreaWidth);
+            ConsoleColor originalForeColor = Console.ForegroundColor;
+            ConsoleColor originalBackColor = Console.BackgroundColor;
+            Console.ForegroundColor = ForegroundColor;
+            Console.BackgroundColor = BackgroundColor;
             for (int i = ClientAreaTopOnScreen; i <= ClientAreaBottomOnScreen; i++)
             {
                 Console.SetCursorPosition(ClientAreaLeftOnScreen, i);
-                ConsoleColor originalForeColor = Console.ForegroundColor;
-                ConsoleColor originalBackColor = Console.BackgroundColor;
-                Console.ForegroundColor = ForegroundColor;
-                Console.BackgroundColor = BackgroundColor;
                 Console.Write(fillString);
-                Console.ForegroundColor = originalForeColor;
-                Console.BackgroundColor = originalBackColor;
             }
+
+            Console.ForegroundColor = originalForeColor;
+            Console.BackgroundColor = originalBackColor;
         }
 
         public void ClearClientArea()
         {
-            FillClientArea(' ');            
+            FillClientArea(' ');
             CursorTopOnScreen = ClientAreaTopOnScreen;
             CursorLeftOnScreen = ClientAreaLeftOnScreen;
         }
-        
+
         public bool ActivateWindow(ConsoleView window)
         {
             if (window is null) return false;
@@ -292,16 +339,22 @@ namespace MultiConsoleViews
         {
             if (!autoScroll) return;
             if (scrollPosition >= BufferLinesToScreenLinesTotalCount()) return;
+            if (CursorTopOnScreen <= ClientAreaBottomOnScreen) EmptyCurrentLine();
+            if (CursorTopOnScreen > ClientAreaTopOnScreen)
+            {
+                CursorTopOnScreen--;
+                EmptyCurrentLine();
+            }
 
             scrollPosition++;
             WriteBufferToWindowOnScroll();
         }
 
         public void Write(char c)
-        {            
+        {
             List<char> currentLine = Buffer.LastOrDefault();
 
-            if (currentLine is null) 
+            if (currentLine is null)
             {
                 currentLine = new List<char>();
                 Buffer.Add(currentLine);
@@ -318,7 +371,7 @@ namespace MultiConsoleViews
 
         public void Write(string s)
         {
-            foreach(char c in s) Write(c);
+            foreach (char c in s) Write(c);
         }
 
         public void WriteLine(char c)
@@ -333,17 +386,39 @@ namespace MultiConsoleViews
             Write('\n');
         }
 
+        // public string ReadLine()
+        // {
+
+        // }
+
+        public void DrawWindow()
+        {
+            DrawBorder();
+            FillPaddingArea(' ');
+            ClearClientArea();
+            WriteBufferToWindow();
+            foreach (var child in Children) child.DrawWindow();
+        }
+
         internal void DrawBorder()
         {
             ConsoleColor originalColor = Console.ForegroundColor;
             ConsoleColor originalBackColor = Console.BackgroundColor;
-            if (IsActive) Console.ForegroundColor = ActiveBorderColor;
-            else Console.ForegroundColor = InactiveBorderColor;
-            Console.BackgroundColor = BackgroundColor;
+            if (IsActive)
+            {
+                Console.ForegroundColor = ActiveBorderForegroundColor;
+                Console.BackgroundColor = ActiveBorderBackgroundColor;
+            }
+            else
+            {
+                Console.ForegroundColor = InactiveBorderForegroundColor;
+                Console.BackgroundColor = InactiveBorderBackgroundColor;
+            }
+
 
             for (int j = 0; j < BorderSize; j++)
             {
-                int localTop = Top + j, localLeft = Left + j, localBottom = Top + Height - 1 - j, localRight = Left + Width - 1 - j, localBorderWidth = Width - 2 - 2 * j, localBorderHeight = Height - 2 - 2 * j;
+                int localTop = TopOnScreen + j, localLeft = LeftOnScreen + j, localBottom = TopOnScreen + Height - 1 - j, localRight = LeftOnScreen + Width - 1 - j, localBorderWidth = Width - 2 - 2 * j, localBorderHeight = Height - 2 - 2 * j;
                 Console.SetCursorPosition(localLeft, localTop);
                 Console.Write($"{TopLeftCorner}{new string(TopBorder, localBorderWidth)}{TopRightCorner}");
                 DrawTitle();
@@ -358,12 +433,11 @@ namespace MultiConsoleViews
                 Console.SetCursorPosition(localLeft, localBottom);
                 Console.Write($"{BottomLeftCorner}{new string(BottomBorder, localBorderWidth)}{BottomRightCorner}");
             }
-            
+
             Console.ForegroundColor = originalColor;
             Console.BackgroundColor = originalBackColor;
-            ClearClientArea();
+            Console.SetCursorPosition(CursorLeftOnScreen, CursorTopOnScreen);
             //DrawClientAreaBorder();
-            foreach (var child in Children) child.DrawBorder();
         }
 
         internal void OnScrollUpInternal()
@@ -421,7 +495,7 @@ namespace MultiConsoleViews
         private int BufferLinesToScreenLinesTotalCount()
         {
             int sum = 0;
-            for (int i = 0; i < Buffer.Count;i++) sum += BufferLineToScreenLinesCount(i);
+            for (int i = 0; i < Buffer.Count; i++) sum += BufferLineToScreenLinesCount(i);
             return sum;
         }
 
@@ -441,7 +515,7 @@ namespace MultiConsoleViews
                 }
 
                 int startChar = 0;
-                while (startChar + ClientAreaWidth < row.Count && screenLinesUpToNow < startLine+length)
+                while (startChar + ClientAreaWidth < row.Count && screenLinesUpToNow < startLine + length)
                 {
                     screenLinesUpToNow++;
                     if (screenLinesUpToNow < startLine)
@@ -454,9 +528,10 @@ namespace MultiConsoleViews
                     startChar += ClientAreaWidth;
                 }
 
-                if (startChar < row.Count && startLine <= screenLinesUpToNow + 1 && screenLinesUpToNow < startLine+length)
+                if (startChar < row.Count && startLine <= screenLinesUpToNow + 1 && screenLinesUpToNow < startLine + length)
                 {
-                    retVal.Add(new string(row.GetRange(startChar, row.Count - startChar).ToArray()));
+                    string partialRow = new string(row.GetRange(startChar, row.Count - startChar).ToArray()).TrimEnd('\r');
+                    retVal.Add($"{partialRow}{new string(' ', ClientAreaWidth - partialRow.Length)}");
                 }
             }
 
@@ -472,9 +547,11 @@ namespace MultiConsoleViews
         }
 
         private void WriteBufferToWindow()
-        {            
-            ClearClientArea();
+        {
+            //ClearClientArea();
             List<string> screenLines = BufferToScreenLines(scrollPosition);
+            CursorLeftOnScreen = ClientAreaLeftOnScreen;
+            CursorTopOnScreen = ClientAreaTopOnScreen;
             foreach (var line in screenLines)
             {
                 foreach (char c in line) WriteClientArea(c);
@@ -497,12 +574,12 @@ namespace MultiConsoleViews
         {
             if (Title.Length > ClientAreaWidth)
             {
-                Console.SetCursorPosition(ClientAreaLeftOnScreen, Top);
+                Console.SetCursorPosition(ClientAreaLeftOnScreen, TopOnScreen);
                 Console.Write($"{Title.Substring(0, ClientAreaWidth / 2 - 1)}..{Title.Substring(Title.Length - (int)Math.Ceiling(ClientAreaWidth / 2.0) + 1)}");
             }
             else
             {
-                Console.SetCursorPosition(ClientAreaLeftOnScreen + (ClientAreaWidth - Title.Length) / 2, Top);
+                Console.SetCursorPosition(ClientAreaLeftOnScreen + (ClientAreaWidth - Title.Length) / 2, TopOnScreen);
                 Console.Write(Title);
             }
         }
@@ -553,7 +630,7 @@ namespace MultiConsoleViews
         {
 
             if (startLine < 0) startLine = 0;
-            if (numberOfLines <= 0) numberOfLines = Math.Min(ClientAreaHeight, Buffer.Count-startLine);
+            if (numberOfLines <= 0) numberOfLines = Math.Min(ClientAreaHeight, Buffer.Count - startLine);
 
             return Buffer.GetRange(startLine, numberOfLines);
         }

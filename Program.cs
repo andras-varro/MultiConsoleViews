@@ -11,22 +11,25 @@ namespace MultiConsoleViews
         {
             ConsoleView window = new ConsoleView
             {
-                RequestedTop = 2,
-                RequestedLeft = 2,
-                RequestedWidth = 70,
-                RequestedHeight = 25,
+                RequestedTop = 0,
+                RequestedLeft = 0,
+                RequestedWidth = 1000,
+                RequestedHeight = 1000,
                 Title = "Short Title",
-                BorderSize = 4,
-                Padding = 4
+                BorderSize = 2,
+                Padding = 1
             };
-            window.SetBorder(new DualLineBorder());
+            window.SetBorder(new ThickLineBorder());
             window.ForegroundColor = ConsoleColor.Black;
             window.BackgroundColor = ConsoleColor.Blue;
-            window.ActiveBorderColor = ConsoleColor.Black;
-            // Window child = new Window { RequestedTop = 4, RequestedLeft = 4, RequestedWidth = 20, RequestedHeight = 10, Title = "Very long title for this little window!" };
-            // window.AddChildWindow(child);
-            // child = new Window { RequestedTop = 15, RequestedLeft = 10, RequestedWidth = 16, RequestedHeight = 8, Title = "Title" };
-            // window.AddChildWindow(child);
+            window.ActiveBorderForegroundColor = ConsoleColor.Black;
+            window.ActiveBorderBackgroundColor = ConsoleColor.Blue;
+            window.InactiveBorderBackgroundColor = ConsoleColor.Blue;
+            window.PaddingBackgroundColor = ConsoleColor.DarkGreen;
+            ConsoleView child = new ConsoleView { RequestedTop = 4, RequestedLeft = 4, RequestedWidth = 20, RequestedHeight = 10, Title = "Very long title for this little window!" };
+            window.AddChildWindow(child);
+            child = new ConsoleView { RequestedTop = 15, RequestedLeft = 10, RequestedWidth = 16, RequestedHeight = 8, Title = "Title" };
+            window.AddChildWindow(child);
             // child = new Window { RequestedTop = 5, RequestedLeft = 25, RequestedWidth = 16, RequestedHeight = 4, Title = "Small" };
             // window.AddChildWindow(child);
             new UpdateQueue().Run(window);
@@ -43,7 +46,7 @@ namespace MultiConsoleViews
             RootWindow = rootWindow;
             Console.Clear();
             Console.CursorVisible = false;
-            RootWindow.DrawBorder();
+            RootWindow.DrawWindow();
             while (true)
             {
                 ConsoleKeyInfo cki = Console.ReadKey(true);
